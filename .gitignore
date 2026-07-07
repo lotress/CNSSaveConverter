@@ -1,0 +1,15 @@
+.backup
+.cache
+.log
+.temp
+.vscode
+__pycache__
+output/**/*
+patches/**/*
+/build
+/dist
+/backup
+/*.spec
+/*.exe
+/*.zip
+/*.7z
