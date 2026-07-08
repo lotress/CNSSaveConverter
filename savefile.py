@@ -449,7 +449,7 @@ def savePatches(version=0):
       pickle.dump(GlobalPatches, fp, protocol=5)
 
 def backupFile(filePath):
-  backFolder = osp.join(osp.dirname(filePath), 'backup')
+  backFolder = osp.join(osp.dirname(filePath), 'Backup')
   os.makedirs(backFolder, exist_ok=True)
   name, ext = osp.splitext(osp.basename(filePath))
   timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
