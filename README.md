@@ -10,6 +10,15 @@ The source code is published on [my Github](https://github.com/lotress/CNSSaveCo
 
 源代码发布在[我的Github](https://github.com/lotress/CNSSaveConverter)。
 
+## About corrupted CNS file and how I fixed it / 我是怎么修复的
+
+At some point, changing outfits with CNS visually appeared to work, but the internal CNS data was not updated. In that state, saving a preset file would only write the old fixed outfit, and loading the save would restore the old appearance. This means the CNS save file (`DekCNS.sav`) had become corrupted, and it could not be fixed from within the game.
+
+I converted both the corrupted save and a good initial save to JSON, then replaced top-level properties in the bad save piece by piece. I eventually found that removing the `AutoLoadCNS` and `CamPosition` properties allowed CNS to save correctly again. Compared with presets, these two properties are just negligible. I still do not understand why this works, but since it does, I implemented the fix in this tool so you can try it if you see the same issue, just run the command line program with `fix` command on your save file. Of course, it may not work in every case, so please share any failure examples.
+
+在某一时刻，用CNS更换服装虽然视觉上正常改变但CNS的内部数据没有更新，此时保存预置档将只能写入固定的旧服装，并且载入存档后外观也会恢复成旧的。这意味着CNS存档文件（DekCNS.sav）已经损坏，在游戏中操作无法修正。
+我将损坏存档和一个好的初始存档都转换为JSON，分部替换坏存档的顶级属性，直到发现删除"AutoLoadCNS"和"CamPosition"这两个属性之后CNS能够正常保存了，跟预置档相比这两个选项无足轻重。我完全不能理解这一切的原因，但既然这么做有效，那我就在程序里实现了这个功能，出现同样的现象时你也可以试试，命令行程序以fix命令执行，输入你的存档文件。当然这么做也可能无效，你可以分享失效的案例。
+
 ## ⚠️ Disclaimer / 注意
 
 This tool is entirely based on reverse-engineering of the CNS save file format. I did not have access to CNS design documentation, so this implementation may be incomplete. Use it at your own risk. After saving a file you should immediately verify it in-game. Before overwriting any existing save, this tool automatically creates a backup in a `backup` folder next to the save file.
@@ -30,16 +39,17 @@ I provide both a standalone command-line program and a [Mod Organizer](https://w
 Command format / 命令格式:
 
 ```bash
-CNSSaveConverter [-h] [-i INDENT] [-v] {tojson,fromjson} input output
+CNSSaveConverter [-h] [-i INDENT] [-v] {tojson,fromjson,fix} input output
 ```
 
 Parameters / 参数说明:
 
 ```bash
 positional arguments:
-  {tojson,fromjson}     Command to execute
+  {tojson,fromjson,fix}
+                        Command to execute
   input                 Input file path
-  output                Output file path
+  output                Output file path (not required for fix) (default: None)
 
 options:
   -h, --help            show this help message and exit

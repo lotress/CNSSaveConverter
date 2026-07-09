@@ -434,6 +434,14 @@ class SaveFile(TaggedStruct):
       data = json.load(fp)
     return SaveFile.fromJson(data, Context(container=STRUCT))
 
+  @staticmethod
+  def fix(filePath):
+    obj = SaveFile.loadSave(filePath)
+    for item in obj.items:
+      if item.name in {'AutoLoadCNS', 'CamPosition'}:
+        obj.items.remove(item)
+    obj.dumpSave(filePath)
+
 def savePatches(version=0):
   newPatches = {
     'Header': SaveFile.Header,
