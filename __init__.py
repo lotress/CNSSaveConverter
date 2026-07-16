@@ -8,7 +8,7 @@ from PyQt6.QtCore import QCoreApplication # type: ignore
 from PyQt6.QtGui import QIcon # type: ignore
 from PyQt6.QtWidgets import QMessageBox, QDialog, QDialogButtonBox, QFileDialog # type: ignore
 
-logger = logging.getLogger('CNSSaveConverter_Plugin')
+logger = logging.getLogger('SBSaveConverter_Plugin')
 
 @dataclass
 class Args:
@@ -21,7 +21,7 @@ class Plugin(mobase.IPluginTool):
     return True
 
   def name(self):
-    return "CNS save file JSON converter"
+    return "Stellar Blade save file JSON converter"
 
   def displayName(self):
     return self.name()
@@ -30,13 +30,13 @@ class Plugin(mobase.IPluginTool):
     return "github.com/lotress"
 
   def description(self):
-    return self.tr("A tool convert CNS save file from/to JSON file.")
+    return self.tr("A tool convert Stellar Blade / Mods save file from/to JSON file.")
 
   def tooltip(self):
     return self.description()
 
   def version(self):
-    return mobase.VersionInfo(1, 0, 0, 0)
+    return mobase.VersionInfo(2, 0, 0, 0)
 
   def isActive(self):
     return True
@@ -57,7 +57,7 @@ class Plugin(mobase.IPluginTool):
     self.__parentWidget = widget
 
   def tr(self, str):
-    return QCoreApplication.translate("CNSSaveConverter", str)
+    return QCoreApplication.translate("SBSaveConverter", str)
 
   def display(self):
     self.__args.indent = self.pluginSetting('indent')
@@ -66,7 +66,7 @@ class Plugin(mobase.IPluginTool):
 
     # Ask user to pick an input file (.sav or .json)
     caption = self.tr('Open save or JSON file')
-    file_filter = self.tr('CNS Save or JSON Files (*.sav *.json);;All files (*)')
+    file_filter = self.tr('Stellar Blade Save or JSON Files (*.sav *.json);;All files (*)')
     input_path, _ = QFileDialog.getOpenFileName(parent, caption, saveDirectory, file_filter)
     if not input_path:
       return
@@ -84,7 +84,7 @@ class Plugin(mobase.IPluginTool):
         suggested = base + '.json'
 
       out_caption = self.tr('Save converted file as')
-      out_filter = self.tr('{};;All files (*)'.format('CNS Save Files (*.sav)' if ext == '.json' else 'JSON files (*.json)'))
+      out_filter = self.tr('{};;All files (*)'.format('Stellar Blade Save Files (*.sav)' if ext == '.json' else 'JSON files (*.json)'))
       output_path, _ = QFileDialog.getSaveFileName(parent, out_caption, suggested, out_filter)
       if not output_path:
         return

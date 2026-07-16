@@ -3,11 +3,11 @@ import os
 import sys
 from savefile import SaveFile
 
-VERSION = '1.0.0'
+VERSION = '2.0.0'
 
 def parse_args():
   parser = argparse.ArgumentParser(
-    description='CNS save file JSON converter',
+    description='Stellar Blade save file JSON converter',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
   )
   parser.add_argument('command', choices=['tojson', 'fromjson', 'fix'], help='Command to execute')

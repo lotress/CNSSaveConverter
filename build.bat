@@ -1,1 +1,1 @@
-pyinstaller --onefile --clean -p "" --distpath . --name CNSSaveConverter cli.py
+pyinstaller --onefile --clean -p "" --distpath . --name SBSaveConverter cli.py
