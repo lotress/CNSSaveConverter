@@ -2,6 +2,7 @@ import logging
 import struct
 import pickle
 import json
+import zlib
 import shutil
 import sys
 import os
@@ -12,7 +13,7 @@ from abc import ABC
 
 class MyBytesIO(BytesIO):
   def read_fstring(self):
-    length = self.read_i32()
+    length = self.read_u32()
     return '' if length == 0 else self.read(length)[:-1].decode("utf-8")
 
   def read_bool(self):
@@ -20,11 +21,11 @@ class MyBytesIO(BytesIO):
 
   def write_fstring(self, s):
     if not len(s):
-      return self.write_i32(0)
+      return self.write_u32(0)
     if type(s) is str:
       s = s.encode("utf-8")
     data = s + b"\0"
-    self.write_i32(len(data))
+    self.write_u32(len(data))
     self.write(data)
 
   def write_bool(self, x):
@@ -32,15 +33,15 @@ class MyBytesIO(BytesIO):
 
   def begin_size(self):
     pos = self.tell()
-    self.write_i64(0)
+    self.write_u64(0)
     return pos
 
   def end_size(self, pos, start):
     end = self.tell()
     self.seek(pos)
-    self.write_i64(end - start)
+    self.write_u64(end - start)
     self.seek(end)
-for t, fmt in zip(['u8', 'i32', 'i64', 'float'], ['<B', '<i', '<q', '<f']):
+for t, fmt in zip(['u8', 'i32', 'u32', 'i64', 'u64', 'float'], ['<B', '<i', '<I', '<q', '<Q', '<f']):
   setattr(MyBytesIO, 'read_' + t, (lambda fmt: lambda self: struct.unpack(fmt, self.read(struct.calcsize(fmt)))[0])(fmt))
   setattr(MyBytesIO, 'write_' + t, (lambda fmt: lambda self, x: self.write(struct.pack(fmt, x)))(fmt))
 
@@ -51,7 +52,7 @@ class Context:
     self.container=container
 
   def child(self,**kwargs):
-    d=dict(property_name=self.property_name, container=self.container)
+    d = dict(property_name=self.property_name, container=self.container)
     d.update(kwargs)
     return Context(**d)
 class Property(ABC):
@@ -60,7 +61,7 @@ class Property(ABC):
   def parsePayload(self, reader, ctx): pass
   @classmethod
   def parse(cls, reader, ctx):
-    obj=cls.parseHeader(reader, ctx)
+    obj = cls.parseHeader(reader, ctx)
     obj.parsePayload(reader, ctx)
     return obj
   def serializeHeader(self, writer, ctx): pass
@@ -109,19 +110,55 @@ newProperty = lambda k, t: (k, type(k, (SizedProperty,), {
   'parsePayload': parse_property(t),
   'serializePayload': lambda self, writer, ctx: getattr(writer, 'write_' + t)(self.value),
 }))
-PROPERTY_REGISTRY = dict(newProperty(k + 'Property', t) for k, t in zip(['Int', 'Float', 'Bool', 'Str'], ['i32', 'float', 'bool', 'fstring']))
-PROPERTY_REGISTRY['BoolProperty'].serializeHeader = lambda self, *args: super(PROPERTY_REGISTRY['BoolProperty'], self).serializeHeader(*args) and (-1, 0) # treat BoolProperty as size 0
+PROPERTY_REGISTRY = dict(newProperty(k + 'Property', t) for k, t in zip(['Int', 'UInt32', 'Float', 'Bool', 'Str', 'Int64'], ['i32', 'u32', 'float', 'bool', 'fstring', 'i64']))
+def parseBool(cls, reader, ctx):
+  if ctx.container == STRUCT:
+    reader.seek(8, 1) # skip 8B zero
+  obj = cls()
+  obj.value = reader.read_bool()
+  if ctx.container == STRUCT:
+    reader.seek(1, 1) # skip 1B zero
+  return obj
+def serializeBool(self, writer, ctx):
+  pos, _ = self.serializeHeader(writer, ctx)
+  if pos >= 0:
+    writer.seek(-1, 1)
+  self.serializePayload(writer, ctx)
+  if pos >= 0:
+    writer.write_u8(0)
+PROPERTY_REGISTRY['BoolProperty'].parse = classmethod(parseBool)
+PROPERTY_REGISTRY['BoolProperty'].serialize = serializeBool
 PROPERTY_REGISTRY['None'] = type('NoneProperty', (Property,), {'serializeHeader': lambda self, writer, ctx: writer.write_fstring('None')})
 GlobalNone = PROPERTY_REGISTRY['None']()
-setMeta = lambda name, **args: PropertyMeta.setdefault(name, args)
-toShort = lambda name: name.split('_')[0]
+PropertyFullName = {}
+JsonPatches = {
+  'Header': 0,
+  'Type': '',
+  'PropertyMeta': {},
+}
+updatePatches = lambda src, dst: [dst[k].update(v) if type(v) is dict else dst.update([(k, v)]) for k, v in src.items() if k in dst]
+def setMeta(name, **args):
+  PropertyMeta.setdefault(name, args)
+  if args != PropertyMeta[name]:
+    JsonPatches['PropertyMeta'][name] = {k: v.hex() if isinstance(v, bytes) else v for k, v in args.items()}
 def checkPropertyName(name):
-  shortName = toShort(name)
-  if len(name) == len(shortName) or len(shortName) < 3:
+  if len(name) < 35:
     return name
-  if not shortName in PropertyFullName or PropertyFullName[shortName] != name:
-    PropertyFullName[shortName] = name
-  return shortName
+  if all(c in '0123456789ABCDEF' for c in name[-32:]) and name[-33] == '_':
+    shortName = name.split('_')[0]
+    PropertyFullName.setdefault(shortName, name)
+    return shortName
+  return name
+def rememberType(base, __type__):
+  def parseHeader(cls, reader, ctx):
+    obj = super(cls, cls).parseHeader(reader, ctx)
+    if ctx.container == STRUCT:
+      setMeta(ctx.property_name, __type__=__type__)
+    return obj
+  return type(__type__, (base,), {'parseHeader': classmethod(parseHeader)})
+PROPERTY_REGISTRY['NameProperty'] = rememberType(PROPERTY_REGISTRY['StrProperty'], "NameProperty")
+PROPERTY_REGISTRY['UInt32Property'] = rememberType(PROPERTY_REGISTRY['UInt32Property'], "UInt32Property")
+PROPERTY_REGISTRY['Int64Property'] = rememberType(PROPERTY_REGISTRY['Int64Property'], "Int64Property")
 class NamedProperty(Property):
   def __init__(self, name="", value=None, type_name=""):
     self.name = name
@@ -157,11 +194,69 @@ TYPE_MAPPING = {
   list: 'ArrayProperty'
 }
 STRUCT_REGISTRY = {k: type(k, (FloatVector,), {'LENGTH': l}) for k, l in zip(['Vector', 'Quat'], [3, 4])}
+def fromJsonGuid(cls, data, ctx):
+  obj = cls()
+  obj.value = bytes.fromhex(data)
+  return obj
 STRUCT_REGISTRY.update(
-  VectorControls=STRUCT_REGISTRY['Quat']
+  VectorControls=STRUCT_REGISTRY['Quat'],
+  Rotator=STRUCT_REGISTRY['Vector'],
+  Guid=type('Guid', (Property,), {
+    'parsePayload': lambda self, reader, ctx: setattr(self, 'value', reader.read(16)),
+    'serializePayload': lambda self, writer, ctx: writer.write(self.value),
+    'toJson': lambda self: self.value.hex(),
+    'fromJson': classmethod(fromJsonGuid)
+  })
 )
 getCodec = lambda name: STRUCT_REGISTRY.get(name, TaggedStruct)
 
+@register_property("EnumProperty")
+class EnumProperty(PROPERTY_REGISTRY['StrProperty']):
+  __type__ = "EnumProperty"
+  @classmethod
+  def parseHeader(cls, reader, ctx):
+    obj = cls()
+    if ctx.container in {MAP, ARRAY}:
+      return obj
+    reader.seek(8, 1) # skip size
+    obj.enum_name = reader.read_fstring()
+    obj.flag = reader.read_u8()
+    setMeta(ctx.property_name, __type__=cls.__type__, flag=obj.flag)
+    return obj
+  def parsePayload(self, reader, ctx):
+    if getattr(self, 'enum_name', '') == 'None':
+      self.value = reader.read_u8()
+    else:
+      super().parsePayload(reader, ctx)
+
+  def serializeHeader(self, writer, ctx):
+    if ctx.container in {MAP, ARRAY}:
+      return -1, 0
+    pos = writer.begin_size()
+    writer.write_fstring(self.enum_name)
+    writer.write_u8(self.flag)
+    start = writer.tell()
+    return pos, start
+  def serializePayload(self, writer, ctx):
+    if getattr(self, 'enum_name', '') == 'None':
+      writer.write_u8(self.value)
+    else:
+      super().serializePayload(writer, ctx)
+
+  def toJson(self):
+    enum_name = getattr(self, 'enum_name', '')
+    return f'{enum_name}::{self.value}' if enum_name else self.value
+  @classmethod
+  def fromJson(cls, data, ctx):
+    obj = super().fromJson(data, ctx)
+    if not ctx.container in {MAP, ARRAY}:
+      meta = PropertyMeta.get(ctx.property_name, {})
+      obj.__dict__.update(meta)
+      obj.enum_name, _, obj.value = obj.value.partition('::')
+      if obj.enum_name == 'None':
+        obj.value = 0
+    return obj
+PROPERTY_REGISTRY['ByteProperty'] = type('ByteProperty', (EnumProperty,), {'__type__': "ByteProperty"})
 @register_property("MapProperty")
 class MapProperty(SizedProperty):
   @classmethod
@@ -220,7 +315,7 @@ class TaggedStruct(Property):
     [item.serialize(writer, ctx) for item in self.items + [GlobalNone]]
 
   def toJson(self):
-    return {toShort(v.name): v.value.toJson() for v in self.items}
+    return {checkPropertyName(v.name): v.value.toJson() for v in self.items}
   @staticmethod
   def constructProperty(v, ctx):
     # Try to use stored metadata first (PropertyMeta keyed by short names)
@@ -235,16 +330,20 @@ class TaggedStruct(Property):
   @classmethod
   def fromJson(cls, data, ctx):
     obj = cls()
-    obj.items = [NamedProperty(PropertyFullName.get(k, k), *TaggedStruct.constructProperty(v, ctx.child(property_name=k))) for k, v in data.items()]
+    obj.items = [NamedProperty(PropertyFullName.get(k, k), *TaggedStruct.constructProperty(v, ctx.child(property_name=k, container=STRUCT))) for k, v in data.items()]
     return obj
 @register_property(Type="ArrayProperty")
 class ArrayProperty(SizedProperty):
+  __type__ = "ArrayProperty"
+  Skip4 = False
   @classmethod
   def parse(cls, reader, ctx):
     obj = cls()
     reader.seek(8, 1) # skip size
     obj.item_type = reader.read_fstring()
     reader.seek(1, 1)
+    if cls.Skip4:
+      reader.seek(4, 1)
     count = reader.read_i32()
     obj.array_name = None
     child = ctx.child(container=ARRAY)
@@ -260,7 +359,7 @@ class ArrayProperty(SizedProperty):
     else:
       parser = PROPERTY_REGISTRY[obj.item_type]
       extra = {}
-    setMeta(ctx.property_name, __type__="ArrayProperty", item_type=obj.item_type, **extra)
+    setMeta(ctx.property_name, __type__=cls.__type__, item_type=obj.item_type, **extra)
     obj.items = [parser.parse(reader, child) for _ in range(count)]
     return obj
 
@@ -269,6 +368,8 @@ class ArrayProperty(SizedProperty):
     writer.write_fstring(self.item_type)
     writer.write_u8(0)
     start = writer.tell()
+    if self.Skip4:
+      writer.write_i32(0)
     writer.write_i32(len(self.items))
     return pos, start
   def serializePayload(self, writer, ctx):
@@ -304,6 +405,7 @@ class ArrayProperty(SizedProperty):
     item_cls = obj.prototype.codec if obj.item_type == "StructProperty" else PROPERTY_REGISTRY.get(obj.item_type) or getCodec(obj.item_type)
     obj.items = [item_cls.fromJson(item, ctxChild) for item in data]
     return obj
+PROPERTY_REGISTRY['SetProperty'] = type('SetProperty', (ArrayProperty,), dict(__type__="SetProperty", Skip4=True))
 
 @register_property(Type="StructProperty")
 class StructProperty(SizedProperty):
@@ -366,10 +468,12 @@ class StructProperty(SizedProperty):
     obj.value = obj.codec.fromJson(data, ctx.child(container=STRUCT))
     return obj
 
+fromhex = lambda v: v.update(guid=bytes.fromhex(v['guid'])) or v if 'guid' in v else v
 class SaveFile(TaggedStruct):
+  HeadMagic = {b'GVAS': 0, b'EVAS': 1}
   @staticmethod
   def init():
-    global GlobalPatches, PropertyFullName, PropertyMeta
+    global GlobalPatches
     if getattr(sys, 'frozen', False):
       me = osp.dirname(osp.abspath(sys.executable))
     else:
@@ -380,10 +484,26 @@ class SaveFile(TaggedStruct):
     SaveFile.me = me
     with open(osp.join(SaveFile.me, 'patches.bin'), 'rb') as fp:
       GlobalPatches = pickle.load(fp)
-    SaveFile.Header = GlobalPatches['Header']
-    SaveFile.Type = GlobalPatches['Type']
-    PropertyFullName = GlobalPatches.get('PropertyFullName', {})
+  @staticmethod
+  def setMe(reader=None, patches=None):
+    assert (reader is None) ^ (patches is None)
+    global PropertyMeta
     PropertyMeta = GlobalPatches.get('PropertyMeta', {})
+    if reader is not None:
+      JsonPatches['Header'] = SaveFile.probeHeader(reader)
+    else:
+      updatePatches(patches, JsonPatches)
+      PropertyFullName.update(patches['PropertyFullName'])
+      PropertyMeta.update({k: fromhex(v) for k, v in JsonPatches['PropertyMeta'].items()})
+    SaveFile.Header = GlobalPatches['Header']
+    if JsonPatches['Header']:
+      SaveFile.Header = GlobalPatches['Header1'] + GlobalPatches['Header']
+    SaveFile.Type = JsonPatches['Type'] or GlobalPatches['Type']
+  @staticmethod
+  def probeHeader(reader):
+    magic = reader.read(4)
+    reader.seek(0)
+    return SaveFile.HeadMagic[magic]
   @classmethod
   def parse(cls, reader):
     try:
@@ -402,6 +522,10 @@ class SaveFile(TaggedStruct):
     writer.write_fstring(SaveFile.Type)
     super().serialize(writer, Context(container=STRUCT))
     writer.write_i32(0) # write 4B zeros
+    if JsonPatches['Header']:
+      data = writer.getvalue()
+      crc = zlib.crc32(data[8:]) & 0xffffffff
+      writer.write_u32(crc)
 
   def dumpSave(self, filePath):
     data = MyBytesIO()
@@ -416,6 +540,7 @@ class SaveFile(TaggedStruct):
     with open(filePath, 'rb') as fp:
       data = fp.read()
     reader = MyBytesIO(data)
+    SaveFile.setMe(reader=reader)
     result = SaveFile.parse(reader)
     file_version = int(osp.getmtime(filePath))
     savePatches(file_version)
@@ -424,14 +549,24 @@ class SaveFile(TaggedStruct):
   def dumpJson(self, filePath, **jsonArgs):
     args = {'ensure_ascii': False}
     args.update(jsonArgs)
+    data = self.toJson()
+    keys = ('Header', 'PropertyMeta')
+    patches = {key: JsonPatches[key] for key in keys if JsonPatches[key]}
+    patches['PropertyFullName'] = PropertyFullName
+    if SaveFile.Type != GlobalPatches.get('Type', ''):
+      patches['Type'] = SaveFile.Type
+    if patches:
+      data['$patches'] = patches
     with open(filePath, 'w', encoding='utf-8') as fp:
-      json.dump(self.toJson(), fp, **args)
+      json.dump(data, fp, **args)
 
   @staticmethod
   def loadJson(filePath):
     SaveFile.init()
     with open(filePath, 'r', encoding='utf-8') as fp:
       data = json.load(fp)
+    patches = data.pop('$patches', {})
+    SaveFile.setMe(patches=patches)
     return SaveFile.fromJson(data, Context(container=STRUCT))
 
   @staticmethod
@@ -444,9 +579,8 @@ class SaveFile(TaggedStruct):
 
 def savePatches(version=0):
   newPatches = {
-    'Header': SaveFile.Header,
+    'Header': SaveFile.Header[len(GlobalPatches['Header1']):] if JsonPatches['Header'] else SaveFile.Header,
     'Type': SaveFile.Type,
-    'PropertyFullName': PropertyFullName,
     'PropertyMeta': PropertyMeta,
     'version': version
   }
