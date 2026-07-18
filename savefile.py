@@ -13,19 +13,26 @@ from abc import ABC
 
 class MyBytesIO(BytesIO):
   def read_fstring(self):
-    length = self.read_u32()
-    return '' if length == 0 else self.read(length)[:-1].decode("utf-8")
+    length = self.read_i32()
+    code = 'ascii' if length > 0 else 'utf-16-le'
+    length = length if length > 0 else -2 * length
+    return '' if length == 0 else self.read(length).decode(code)[:-1]
 
   def read_bool(self):
     return self.read(1) != b'\0'
 
   def write_fstring(self, s):
     if not len(s):
-      return self.write_u32(0)
+      return self.write_i32(0)
     if type(s) is str:
-      s = s.encode("utf-8")
-    data = s + b"\0"
-    self.write_u32(len(data))
+      s += '\0'
+      length = len(s)
+      try:
+        data = s.encode("ascii")
+      except UnicodeEncodeError:
+        data = s.encode("utf-16-le")
+        length *= -1
+    self.write_i32(length)
     self.write(data)
 
   def write_bool(self, x):
