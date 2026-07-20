@@ -4,11 +4,15 @@
 
 [CNS - Custom Nanosuit System](https://www.nexusmods.com/stellarblade/mods/1496) broke my save file. I was about to lose hundreds of outfit saves that took days to craft ...or... I made this tool to fix it all. This tool converts save files of Stellar Blade & Mods to JSON and back, so you can safely inspect and edit your save data with any text editor.
 
+After upgrading to version 2.0, this tool supports saving and loading conversions for the game itself and many mods. Of course, I haven't seen all mods, so there might be some that it cannot handle. Additionally, the new version is not compatible with JSON files exported by the old version. You'll need to use the new version to convert saves to JSON.
+
+The source code is published on [my Github](https://github.com/lotress/CNSSaveConverter). You can also download the release file from Github if it's quarantined on nexusmods.
+
 [CNS - Custom Nanosuit System](https://www.nexusmods.com/stellarblade/mods/1496)把我的存档弄坏了。我注定要告别花费好几天时间雕琢出来的几百套服装存档...或者...我做了这个工具来修复这一切。这个工具可以在剑星及各种Mod的存档与JSON格式之间双向转换，现在亲爱的玩家朋友可以用任意文本编辑器修改存档文件。
 
-The source code is published on [my Github](https://github.com/lotress/CNSSaveConverter).
+升级到2.0版本后，这个工具支持游戏本身和许多Mod的存档转换，当然我没见过所有Mod，可能存在无法处理的。另外新版本不兼容旧版本输出的JSON文件，你需要用新版本从存档转换为JSON。
 
-源代码发布在[我的Github](https://github.com/lotress/CNSSaveConverter)。
+源代码发布在[我的Github](https://github.com/lotress/CNSSaveConverter)。如果在nexusmods的文件下载被隔离中，你也可以去Github的Release页面下载。
 
 ## About corrupted CNS file and how I fixed it / 我是怎么修复的
 
@@ -27,9 +31,9 @@ This tool is entirely based on reverse-engineering of Stellar Blade save file fo
 
 ## Installation / 安装方式
 
-I provide both a standalone command-line program and a [Mod Organizer](https://www.modorganizer.org/) plugin version. For the standalone program, download the archive and extract it to a regular directory. For the Mod Organizer plugin, extract it under Mod Organizer's `plugins\` directory.
+I provide both a standalone command-line program and a [Mod Organizer](https://www.modorganizer.org/) plugin version. For the standalone program, download the archive and extract it to a regular directory. For the Mod Organizer plugin, extract it under Mod Organizer's `plugins\` directory, delete the old `CNSSaveConverter` Folder if exists.
 
-我提供了独立运行的命令行程序和[Mod Organizer](https://www.modorganizer.org/)插件版本。对于独立程序，下载压缩包后解压到普通目录中，Mod Organizer插件则解压到Mod Organizer的`plugins\`下面。
+我提供了独立运行的命令行程序和[Mod Organizer](https://www.modorganizer.org/)插件版本。对于独立程序，下载压缩包后解压到普通目录中，Mod Organizer插件则解压到Mod Organizer的`plugins\`下面，旧版本的`CNSSaveConverter`目录可以删掉。
 
 ## Usage / 使用方式
 
