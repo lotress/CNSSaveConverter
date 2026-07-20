@@ -31,12 +31,11 @@ This tool is entirely based on reverse-engineering of Stellar Blade save file fo
 
 ## Installation / 安装方式
 
-I provide both a standalone command-line program and a [Mod Organizer](https://www.modorganizer.org/) plugin version. For the standalone program, download the archive and extract it to a regular directory. For the Mod Organizer plugin, extract it under Mod Organizer's `plugins\` directory, delete the old `CNSSaveConverter` Folder if exists.
+I provide both a standalone command-line program and a [Mod Organizer](https://www.modorganizer.org/) plugin version. For the standalone program, download the archive and extract it to a regular directory. For the Mod Organizer plugin, extract it under Mod Organizer's `plugins\` directory, delete the old `CNSSaveConverter` folder if exists.
 
 我提供了独立运行的命令行程序和[Mod Organizer](https://www.modorganizer.org/)插件版本。对于独立程序，下载压缩包后解压到普通目录中，Mod Organizer插件则解压到Mod Organizer的`plugins\`下面，旧版本的`CNSSaveConverter`目录可以删掉。
 
 ## Usage / 使用方式
-
 
 ### Standalone Program / 独立程序
 
